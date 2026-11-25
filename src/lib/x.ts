@@ -153,33 +153,41 @@ async function activateGuestToken(forceRefresh = false): Promise<string> {
     return cachedGuestToken;
   }
 
-  const res = await fetch("https://api.x.com/1.1/guest/activate.json", {
-    method: "POST",
-    headers: getBaseHeaders(),
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new XApiError(
-        "X rate limit — try again in a few minutes",
-        429
-      );
+  // X rate-limits guest activation from shared hosting IPs; a 429 here is
+  // usually transient, so retry once after a short pause instead of
+  // failing the whole fetch immediately.
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-    throw new XApiError(
-      `Failed to obtain X guest session (HTTP ${res.status})`,
-      res.status
-    );
+    const res = await fetch("https://api.x.com/1.1/guest/activate.json", {
+      method: "POST",
+      headers: getBaseHeaders(),
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as { guest_token?: string };
+      if (!data.guest_token) {
+        throw new XApiError("X guest token missing from activation response", 502);
+      }
+      cachedGuestToken = data.guest_token;
+      guestTokenFetchedAt = Date.now();
+      return data.guest_token;
+    }
+
+    lastStatus = res.status;
+    if (res.status !== 429) break;
   }
 
-  const data = (await res.json()) as { guest_token?: string };
-  if (!data.guest_token) {
-    throw new XApiError("X guest token missing from activation response", 502);
+  if (lastStatus === 429) {
+    throw new XApiError("X rate limit — try again in a few minutes", 429);
   }
-
-  cachedGuestToken = data.guest_token;
-  guestTokenFetchedAt = now;
-  return data.guest_token;
+  throw new XApiError(
+    `Failed to obtain X guest session (HTTP ${lastStatus})`,
+    lastStatus
+  );
 }
 
 async function xGraphqlGet<T>(
