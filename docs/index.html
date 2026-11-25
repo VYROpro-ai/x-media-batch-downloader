@@ -287,7 +287,7 @@ var DEFAULT_PREFS = {
   showDemo: false, maxFileMB: 100
 };
 var prefs = loadPrefs();
-var history = loadHistory();
+var savedHistory = loadHistory();
 var historyTab = "saved";
 var historySearch = "";
 
@@ -346,7 +346,7 @@ function loadHistory(){
   try { var raw = localStorage.getItem(HISTORY_KEY); if (raw) { var h = JSON.parse(raw); if (Array.isArray(h)) return h; } } catch(e){}
   return [];
 }
-function saveHistory(){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch(e){} }
+function saveHistory(){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(savedHistory)); } catch(e){} }
 function fmtCount(n){
   n = Number(n) || 0;
   if (n >= 1e6) return (n/1e6).toFixed(1)+"M";
@@ -506,13 +506,16 @@ function saveToHistory(query, user, media){
   var entry = { id: user.screenName.toLowerCase()+"-"+Date.now(), query: query,
     fetchedAt: new Date().toISOString(), user: user, media: media,
     total: media.length, truncated: false };
-  history = history.filter(function(h){ return h.user.screenName.toLowerCase() !== user.screenName.toLowerCase(); });
-  history.unshift(entry);
-  history = history.slice(0,50);
+  savedHistory = savedHistory.filter(function(h){ return h.user.screenName.toLowerCase() !== user.screenName.toLowerCase(); });
+  savedHistory.unshift(entry);
+  savedHistory = savedHistory.slice(0,50);
   saveHistory();
 }
 
 /* ---- Fetch flow ---- */
+function safeScrollToResults(){
+  try { var el = $("results"); if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ behavior:"smooth", block:"start" }); } catch(e){}
+}
 async function runFetch(rawQuery){
   var trimmed = (rawQuery||"").trim();
   if (!trimmed) { showAlert("Please enter an X username, profile URL, or tweet URL."); return; }
@@ -534,7 +537,7 @@ async function runFetch(rawQuery){
       saveToHistory(trimmed, user, []);
     }
     renderResults();
-    if (prefs.autoScroll) $("results").scrollIntoView({ behavior:"smooth", block:"start" });
+    if (prefs.autoScroll) safeScrollToResults();
   } catch (err) {
     showAlert(err && err.message ? err.message : "Failed to fetch media.");
     userProfile = null; mediaItems = []; selectedIds = new Set();
@@ -548,7 +551,7 @@ function showDemo(){
   isDemo = true; isProfileOnly = false; tweetInfo = null;
   showAlert(null);
   renderResults();
-  if (prefs.autoScroll) $("results").scrollIntoView({ behavior:"smooth", block:"start" });
+  if (prefs.autoScroll) safeScrollToResults();
 }
 function filteredMedia(){
   return mediaItems.filter(function(it){ return !!filters[it.type]; });
@@ -780,7 +783,7 @@ function prefsHtml(){
 }
 function historyHtml(){
   var q = historySearch.trim().toLowerCase();
-  var list = history.filter(function(h){
+  var list = savedHistory.filter(function(h){
     return !q || h.user.screenName.toLowerCase().indexOf(q)!==-1 || h.user.name.toLowerCase().indexOf(q)!==-1 || h.query.toLowerCase().indexOf(q)!==-1;
   });
   var items = list.map(function(h){
@@ -792,7 +795,7 @@ function historyHtml(){
       '<div style="display:flex;gap:8px;flex-shrink:0">' + loadBtn + '<button type="button" class="btn amber" data-refetch="' + esc(h.id) + '">Refetch</button></div></div>';
   }).join("");
   return '<div class="panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-    '<div class="tabs"><button type="button" data-htab="refetch"' + (historyTab==="refetch"?' class="active"':"") + '>Refetch (' + history.length + ')</button>' +
+    '<div class="tabs"><button type="button" data-htab="refetch"' + (historyTab==="refetch"?' class="active"':"") + '>Refetch (' + savedHistory.length + ')</button>' +
     '<button type="button" data-htab="saved"' + (historyTab==="saved"?' class="active"':"") + '>Saved Results (' + list.length + ')</button></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="histImportBtn">Import accounts from JSON</button>' +
     '<button type="button" class="btn danger" id="histClearBtn">Clear all fetches</button></div></div>' +
@@ -851,10 +854,10 @@ function wireOverlay(kind){
     var s = $("histSearch");
     if (s) s.oninput = function(){ historySearch = s.value; var pos = s.selectionStart; renderOverlay("history"); var s2 = $("histSearch"); if (s2) { s2.focus(); s2.setSelectionRange(pos,pos); } };
     var imp = $("histImportBtn"); if (imp) imp.onclick = function(){ $("historyImportInput").click(); };
-    var clr = $("histClearBtn"); if (clr) clr.onclick = function(){ history = []; saveHistory(); renderOverlay("history"); };
+    var clr = $("histClearBtn"); if (clr) clr.onclick = function(){ savedHistory = []; saveHistory(); renderOverlay("history"); };
     body.querySelectorAll("[data-load]").forEach(function(b){
       b.onclick = function(){
-        var h = history.find(function(x){ return x.id === b.getAttribute("data-load"); });
+        var h = savedHistory.find(function(x){ return x.id === b.getAttribute("data-load"); });
         if (!h) return;
         $("mainInput").value = h.query; userProfile = h.user; mediaItems = h.media;
         selectedIds = new Set(h.media.map(function(m){ return m.id; }));
@@ -864,7 +867,7 @@ function wireOverlay(kind){
     });
     body.querySelectorAll("[data-refetch]").forEach(function(b){
       b.onclick = function(){
-        var h = history.find(function(x){ return x.id === b.getAttribute("data-refetch"); });
+        var h = savedHistory.find(function(x){ return x.id === b.getAttribute("data-refetch"); });
         if (!h) return;
         $("mainInput").value = h.user.screenName || h.query;
         closeOverlay(); runFetch($("mainInput").value);
@@ -911,7 +914,7 @@ $("historyImportInput").addEventListener("change", function(e){
           media:Array.isArray(raw.media)?raw.media:[], total:Number(raw.total||0), truncated:!!raw.truncated });
       }
     });
-    if (imported.length) { history = imported.concat(history).slice(0,100); saveHistory(); renderOverlay("history"); showAlert("Imported " + imported.length + " account" + (imported.length===1?"":"s") + " from JSON.", "ok"); }
+    if (imported.length) { savedHistory = imported.concat(savedHistory).slice(0,100); saveHistory(); renderOverlay("history"); showAlert("Imported " + imported.length + " account" + (imported.length===1?"":"s") + " from JSON.", "ok"); }
   }).catch(function(){ showAlert("Could not parse JSON file. Provide an array of accounts or usernames."); });
 });
 function loadScript(src){
