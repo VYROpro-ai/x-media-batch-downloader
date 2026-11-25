@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TwitterDL — X Media Batch Downloader</title>
+<meta name="description" content="Drop any X (Twitter) username or link — grab all the media. Fast batch media downloader, ZIP exporter, and browser GIF converter.">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#070b14; --card:#141821; --surface:#0d111a; --surface2:#1c2230;
+    --text:#f8fafc; --muted:#94a3b8; --muted2:#64748b;
+    --amber:#f59e0b; --amber-hover:#fbbf24; --blue:#38bdf8;
+    --border:rgba(148,163,184,.14); --border-strong:#334155;
+    --red:#f87171; --green:#34d399;
+  }
+  body.light{
+    --bg:#eef1f6; --card:#ffffff; --surface:#f1f5f9; --surface2:#e2e8f0;
+    --text:#0f172a; --muted:#475569; --muted2:#94a3b8;
+    --border:rgba(15,23,42,.12); --border-strong:#cbd5e1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background-color:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; flex-direction:column; overflow-x:hidden;
+  }
+  .starfield-bg{
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(56,189,248,.35), transparent),
+      radial-gradient(1px 1px at 28% 72%, rgba(96,165,250,.25), transparent),
+      radial-gradient(2px 2px at 46% 24%, rgba(56,189,248,.28), transparent),
+      radial-gradient(1.2px 1.2px at 67% 82%, rgba(125,211,252,.24), transparent),
+      radial-gradient(1.8px 1.8px at 83% 34%, rgba(56,189,248,.3), transparent),
+      radial-gradient(1px 1px at 91% 66%, rgba(96,165,250,.22), transparent),
+      radial-gradient(1.5px 1.5px at 19% 49%, rgba(125,211,252,.18), transparent),
+      radial-gradient(1px 1px at 56% 58%, rgba(56,189,248,.2), transparent),
+      radial-gradient(ellipse at 50% 0%, rgba(14,165,233,.08), transparent 65%);
+  }
+  body.light .starfield-bg{background-image:radial-gradient(ellipse at 50% 0%, rgba(14,165,233,.06), transparent 65%)}
+  main{width:100%;max-width:520px;margin:0 auto;padding:32px 16px 40px;flex:1;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .brand{display:flex;align-items:center;gap:8px;background:none;border:0;cursor:pointer;text-align:left}
+  .brand .logo{font-size:24px;font-weight:800;letter-spacing:-.5px}
+  .brand .logo .w{color:var(--text)} .brand .logo .b{color:var(--blue)}
+  .brand .dl-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:rgba(56,189,248,.15);color:var(--blue);border:1px solid rgba(56,189,248,.3)}
+  .icon-btns{display:flex;align-items:center;gap:6px}
+  .icon-btn{width:36px;height:36px;border-radius:9999px;background:var(--card);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;color:#cbd5e1;cursor:pointer;transition:.15s}
+  body.light .icon-btn{color:#475569}
+  .icon-btn:hover{background:var(--surface2);color:#fff}
+  body.light .icon-btn:hover{color:#0f172a}
+  .icon-btn svg{width:16px;height:16px}
+  .card{width:100%;border-radius:16px;background:var(--card);border:1px solid var(--border-strong);box-shadow:0 25px 50px -12px rgba(0,0,0,.5);padding:20px 20px 24px}
+  @media(min-width:640px){.card{padding:24px}}
+  .tagline{text-align:center;font-size:15px;color:#cbd5e1;margin-bottom:20px;line-height:1.6}
+  body.light .tagline{color:#475569}
+  .input-row{display:flex;align-items:center;gap:8px;border-radius:12px;background:var(--surface);border:1px solid var(--border-strong);padding:8px 12px;transition:.15s}
+  .input-row:focus-within{border-color:rgba(245,158,11,.8)}
+  .input-row input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font-size:14px;min-width:0}
+  .input-row input::placeholder{color:var(--muted2)}
+  .input-row input:disabled{opacity:.6}
+  .mini-btn{padding:6px;border-radius:8px;color:var(--muted);background:none;border:0;cursor:pointer;flex-shrink:0}
+  .mini-btn:hover{color:var(--amber);background:rgba(148,163,184,.12)}
+  .mini-btn svg{width:16px;height:16px;display:block}
+  .submit-btn{padding:8px 14px;border-radius:8px;background:var(--amber);color:#020617;font-weight:600;border:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .submit-btn:hover{background:var(--amber-hover)}
+  .submit-btn:disabled{opacity:.6;cursor:default}
+  .submit-btn svg{width:16px;height:16px}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid #020617;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .pill-row{margin-top:14px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:9999px;background:var(--surface2);border:1px solid var(--border-strong);color:#e2e8f0;font-size:12px;font-weight:500;cursor:pointer;transition:.15s}
+  body.light .pill{color:#334155}
+  .pill:hover{background:#252d3f;color:#fff}
+  body.light .pill:hover{background:#cbd5e1;color:#0f172a}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--amber)}
+  .demo-note{margin-top:12px;text-align:center;font-size:11px;color:var(--muted2);line-height:1.5}
+  .alert{margin-top:16px;border-radius:12px;padding:10px 14px;font-size:12px;line-height:1.5}
+  .alert.err{background:rgba(127,29,29,.5);border:1px solid rgba(248,113,113,.4);color:#fecaca}
+  .alert.ok{background:rgba(8,47,73,.4);border:1px solid rgba(56,189,248,.3);color:#bae6fd}
+  .alert.warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);color:#fcd34d}
+  body.light .alert.warn{color:#92400e}
+  body.light .alert.err{color:#7f1d1d;background:rgba(254,202,202,.5)}
+  body.light .alert.ok{color:#0c4a6e;background:rgba(186,230,253,.5)}
+  .results{margin-top:24px;padding-top:20px;border-top:1px solid var(--border-strong)}
+  .demo-banner{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#fcd34d;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:6px 12px;margin-bottom:16px}
+  .demo-banner button{background:none;border:0;color:#fcd34d;text-decoration:underline;cursor:pointer;font-size:11px}
+  .profile{display:flex;align-items:flex-start;gap:12px}
+  .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;border:1px solid var(--border-strong);background:#1e293b;flex-shrink:0}
+  .avatar-fallback{width:48px;height:48px;border-radius:50%;background:#1e293b;border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--amber);flex-shrink:0}
+  .profile .name{font-size:14px;font-weight:700;color:var(--text)}
+  .profile .handle{font-size:12px;color:var(--muted)}
+  .profile .bio{font-size:12px;color:#cbd5e1;margin-top:4px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  body.light .profile .bio{color:#475569}
+  .profile .counts{display:flex;gap:16px;margin-top:6px;font-size:11px;color:var(--muted)}
+  .profile .counts strong{color:var(--text);font-weight:600}
+  .tweet-text{margin-top:12px;font-size:12px;color:#cbd5e1;line-height:1.6;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+  body.light .tweet-text{color:#334155}
+  .tweet-meta{margin-top:8px;font-size:11px;color:var(--muted)}
+  .filter-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px;font-size:12px;margin-top:16px}
+  .filter-bar label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--text)}
+  .filter-bar input{accent-color:var(--amber);cursor:pointer}
+  .filter-bar .sel{font-size:11px;display:flex;gap:8px;align-items:center}
+  .filter-bar .sel button{background:none;border:0;cursor:pointer;font-size:11px;font-weight:500;color:var(--amber)}
+  .filter-bar .sel button.plain{color:var(--muted)}
+  .filter-bar .sel button:hover{text-decoration:underline}
+  .count-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:#cbd5e1}
+  body.light .count-row{color:#475569}
+  .count-row strong{color:var(--text)}
+  .zip-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;background:var(--amber);color:#020617;font-size:12px;font-weight:700;border:0;cursor:pointer}
+  .zip-btn:hover{background:var(--amber-hover)}
+  .zip-btn:disabled{opacity:.5;cursor:default}
+  .zip-btn svg{width:14px;height:14px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+  @media(min-width:640px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .tile{position:relative;border-radius:12px;overflow:hidden;background:var(--surface);border:1px solid var(--border-strong);transition:.15s}
+  .tile.selected{border-color:rgba(245,158,11,.7)}
+  .tile:not(.selected){opacity:.75}
+  .tile .thumb{position:relative;aspect-ratio:1/1;width:100%;background:#0f172a;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .tile img,.tile video{width:100%;height:100%;object-fit:cover;display:block}
+  .tile .check{position:absolute;top:6px;left:6px;z-index:2;width:20px;height:20px;border-radius:4px;background:rgba(2,6,23,.75);border:1px solid rgba(148,163,184,.8);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .tile .check input{accent-color:var(--amber);width:14px;height:14px;cursor:pointer}
+  .tile .badge{position:absolute;top:6px;right:6px;z-index:2;padding:2px 6px;border-radius:4px;background:rgba(2,6,23,.8);border:1px solid rgba(148,163,184,.4);font-size:10px;font-weight:700;letter-spacing:.5px;color:#fcd34d}
+  .tile .meta{position:absolute;bottom:6px;left:6px;z-index:2;padding:2px 6px;border-radius:4px;background:rgba(2,6,23,.8);font-size:10px;color:#e2e8f0}
+  .tile .dl{position:absolute;bottom:6px;right:6px;z-index:2;width:28px;height:28px;border-radius:8px;background:var(--amber);color:#020617;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .tile .dl:hover{background:var(--amber-hover)}
+  .tile .dl svg{width:14px;height:14px}
+  .tile .fname{padding:6px 8px;font-size:10px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-top:1px solid var(--border)}
+  body.light .tile .fname{color:#475569}
+  .empty{border-radius:12px;background:var(--surface);border:1px solid var(--border);padding:24px;text-align:center;font-size:12px;color:var(--muted);margin-top:12px}
+  footer{width:100%;max-width:520px;margin:0 auto;padding:8px 16px 32px;text-align:center}
+  footer .links{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  footer .links button{background:none;border:0;color:var(--muted);font-size:12px;cursor:pointer}
+  footer .links button:hover{color:var(--text)}
+  footer p{font-size:11px;color:var(--muted2);line-height:1.6;margin-top:10px}
+  /* Overlays */
+  .overlay{position:fixed;inset:0;z-index:50;background:rgba(7,11,20,.95);backdrop-filter:blur(8px);overflow-y:auto;display:none}
+  .overlay.open{display:block}
+  body.light .overlay{background:rgba(238,241,246,.97)}
+  .overlay-inner{max-width:672px;margin:0 auto;padding:24px 16px}
+  .overlay-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+  .back-btn{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;background:var(--card);border:1px solid var(--border-strong);color:var(--text);font-size:14px;font-weight:500;cursor:pointer}
+  .back-btn:hover{background:var(--surface2)}
+  .overlay-title{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600}
+  .panel{border-radius:16px;background:var(--card);border:1px solid var(--border-strong);padding:20px}
+  .panel h2{font-size:18px;font-weight:700;color:var(--text)}
+  .panel h3{font-size:14px;font-weight:600;color:var(--text);margin-top:16px}
+  .panel p,.panel li{font-size:13px;color:var(--muted);line-height:1.6}
+  .panel p.sub{font-size:12px;margin-top:4px}
+  .panel ul{list-style:disc;padding-left:20px;margin-top:8px}
+  .panel li{margin-bottom:6px}
+  .panel code{color:var(--text);background:var(--surface);padding:1px 5px;border-radius:4px;font-size:12px}
+  .tabs{display:inline-flex;border-radius:8px;background:var(--surface);padding:4px;border:1px solid var(--border)}
+  .tabs button{padding:4px 14px;border-radius:6px;font-size:12px;font-weight:600;background:none;border:0;color:var(--muted);cursor:pointer}
+  .tabs button.active{background:var(--amber);color:#020617}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
+  .row:last-child{border-bottom:0}
+  .row .label{font-size:14px;font-weight:500;color:var(--text)}
+  .row .hint{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+  .row select,.row input[type=text],.row input[type=number]{border-radius:8px;background:var(--surface);border:1px solid var(--border-strong);padding:6px 12px;font-size:12px;color:var(--text)}
+  .row input[type=checkbox]{accent-color:var(--amber);width:16px;height:16px;cursor:pointer}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border-strong);color:var(--text);font-size:12px;font-weight:500;cursor:pointer}
+  .btn:hover{background:#263044}
+  body.light .btn:hover{background:#cbd5e1}
+  .btn.amber{background:var(--amber);color:#020617;font-weight:700;border:0}
+  .btn.amber:hover{background:var(--amber-hover)}
+  .btn.danger{background:rgba(127,29,29,.5);border:1px solid rgba(248,113,113,.3);color:#fecaca}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn-block{width:100%;padding:10px;border-radius:12px;font-size:14px}
+  .search-box{width:100%;border-radius:12px;background:var(--surface);border:1px solid var(--border-strong);padding:8px 14px;font-size:14px;color:var(--text);outline:0;margin-top:16px}
+  .search-box:focus{border-color:rgba(245,158,11,.8)}
+  .hist-item{display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:12px;background:var(--surface);border:1px solid var(--border);padding:12px;margin-top:10px}
+  .hist-item .who{display:flex;align-items:center;gap:12px;min-width:0}
+  .hist-item .who img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--border-strong);flex-shrink:0}
+  .hist-item .who .nm{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist-item .who .sub2{font-size:11px;color:var(--muted);margin-top:2px}
+  .dropzone{border-radius:12px;border:2px dashed var(--border-strong);background:var(--surface);padding:28px;text-align:center;cursor:pointer;transition:.15s;margin-top:16px}
+  .dropzone:hover{border-color:rgba(245,158,11,.7)}
+  .dropzone p{font-size:14px;font-weight:500;color:var(--text)}
+  .dropzone .sel{font-size:12px;color:var(--amber);margin-top:8px}
+  .gif-preview{width:100%;max-height:224px;border-radius:12px;background:#000;border:1px solid var(--border-strong);margin-top:12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .grid2 label{font-size:12px;color:var(--muted);display:block}
+  .grid2 select{width:100%;margin-top:4px;border-radius:8px;background:var(--surface);border:1px solid var(--border-strong);padding:8px 12px;font-size:13px;color:var(--text)}
+  .hidden-input{display:none}
+</style>
+</head>
+<body class="starfield-bg">
+
+<main>
+  <header>
+    <button class="brand" id="brandBtn" type="button" title="TwitterDL home" aria-label="TwitterDL home">
+      <span class="logo"><span class="w">Twitter</span><span class="b">DL</span></span>
+      <span class="dl-badge" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </span>
+    </button>
+    <div class="icon-btns">
+      <button class="icon-btn" id="shareBtn" type="button" title="Share TwitterDL" aria-label="Share TwitterDL">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      </button>
+      <button class="icon-btn" id="historyBtn" type="button" title="History &amp; Saved Accounts" aria-label="History">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button class="icon-btn" id="prefsBtn" type="button" title="Preferences" aria-label="Preferences">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="card">
+    <p class="tagline">Drop any X (Twitter) username or link — grab all the media.</p>
+
+    <form id="fetchForm">
+      <div class="input-row">
+        <input type="text" id="mainInput" placeholder="x.com/nintendo" aria-label="X username, profile URL, or tweet URL" autocomplete="off" spellcheck="false">
+        <button class="mini-btn" id="pasteBtn" type="button" title="Paste from clipboard" aria-label="Paste from clipboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="submit-btn" id="submitBtn" type="submit" aria-label="Fetch media">
+          <svg id="submitArrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </form>
+
+    <div class="pill-row">
+      <button class="pill" id="demoBtn" type="button"><span class="dot"></span>Demo</button>
+      <button class="pill" id="gifBtn" type="button"><span class="dot"></span>GIF Converter</button>
+    </div>
+
+    <p class="demo-note">GitHub Pages demo — tweet links work live here. Full profile timelines need the server version — deploy the same repo on Vercel for that.</p>
+
+    <div id="alertBox"></div>
+    <div id="results"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="links">
+    <button type="button" data-overlay="privacy">Privacy Policy</button>
+    <button type="button" data-overlay="terms">Terms of Service</button>
+    <button type="button" data-overlay="faq">FAQ</button>
+    <button type="button" data-overlay="tips">Tips</button>
+  </div>
+  <p>TwitterDL is an independent platform and is not affiliated with or endorsed by X Corp. We do not host any copyrighted material. Users are responsible for their actions.</p>
+  <p>© 2026</p>
+</footer>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true">
+  <div class="overlay-inner">
+    <div class="overlay-top">
+      <button class="back-btn" id="overlayBack" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back
+      </button>
+      <span class="overlay-title" id="overlayTitle"></span>
+    </div>
+    <div id="overlayBody"></div>
+  </div>
+</div>
+
+<input type="file" id="gifFileInput" class="hidden-input" accept="video/mp4,video/quicktime,video/x-m4v,video/webm,.mp4,.mov,.m4v,.webm">
+<input type="file" id="historyImportInput" class="hidden-input" accept="application/json,.json">
+
+<script>
+"use strict";
+/* TwitterDL — GitHub Pages static demo.
+   Tweet links are fetched live in the browser from the public FxTwitter API
+   (api.fxtwitter.com sends Access-Control-Allow-Origin: *).
+   Full profile timelines need a server (api.x.com sends no CORS headers),
+   so on this static page a profile lookup shows only the user card — see
+   the honest note shown under profile results. The full version of this
+   same repo runs on Vercel with a server route for timelines. */
+
+var PREFS_KEY = "twitterdl_preferences_v1";
+var HISTORY_KEY = "twitterdl_history_v1";
+var FX = "https://api.fxtwitter.com";
+
+var DEFAULT_PREFS = {
+  maxPosts: 200, maxMedia: 600, videoQuality: "Best",
+  filenamePattern: "{username}_{date}_{index}",
+  includeOriginalFilename: true,
+  includeReplies: false,
+  autoScroll: true, showMediaCounts: true,
+  theme: "Dark", language: "English",
+  showDemo: false, maxFileMB: 100
+};
+var prefs = loadPrefs();
+var history = loadHistory();
+var historyTab = "saved";
+var historySearch = "";
+
+var userProfile = null, mediaItems = [], isDemo = false, isProfileOnly = false, tweetInfo = null;
+var filters = { photo: true, video: true, animated_gif: true };
+var selectedIds = new Set();
+var zipBusy = false, downloadingId = null;
+var gifFile = null, gifPreviewUrl = null, gifOutputUrl = null, gifBusy = false, ffmpeg = null;
+
+/* Same sample Nintendo data as DEMO_RESULT in src/app/page.tsx (3 items,
+   same names, handles, bio, counts, filenames, types, sizes, dates).
+   The placeholder media URLs in page.tsx return 404, so this demo points
+   the same three items at working sample media so the grid / ZIP flow
+   can actually be tried. */
+var DEMO_RESULT = {
+  user: {
+    restId: "14459280", name: "Nintendo of America", screenName: "NintendoAmerica",
+    avatarUrl: "https://pbs.twimg.com/profile_images/1823037067847180288/7g8r4O1p_400x400.jpg",
+    bio: "Official tweets from Nintendo of America. Smiles to go!",
+    followersCount: 16420000, followingCount: 142
+  },
+  media: [
+    { id: "demo-1", tweetId: "1993000000000000001", type: "photo",
+      url: "https://pbs.twimg.com/media/HXcFb8EXIAARtGW.jpg",
+      origUrl: "https://pbs.twimg.com/media/HXcFb8EXIAARtGW.jpg?format=jpg&name=orig",
+      thumb: "https://pbs.twimg.com/media/HXcFb8EXIAARtGW.jpg?format=jpg&name=small",
+      filename: "NintendoAmerica_2026-11-25_001.jpg", width: 1920, height: 1080,
+      createdAt: "2026-11-25T12:00:00.000Z",
+      text: "Sample preview item — enter any username or tweet link above to fetch live media." },
+    { id: "demo-2", tweetId: "1993000000000000002", type: "video",
+      url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      origUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      thumb: "https://pbs.twimg.com/media/HXcFb8EXIAARtGW.jpg?format=jpg&name=small",
+      filename: "NintendoAmerica_2026-11-24_002.mp4", width: 1280, height: 720,
+      durationMs: 24500, createdAt: "2026-11-24T18:30:00.000Z",
+      text: "Sample video clip preview." },
+    { id: "demo-3", tweetId: "1993000000000000003", type: "animated_gif",
+      url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      origUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      thumb: "https://pbs.twimg.com/media/HXcFb8EXIAARtGW.jpg?format=jpg&name=small",
+      filename: "NintendoAmerica_2026-11-23_003.mp4", width: 640, height: 360,
+      durationMs: 3200, createdAt: "2026-11-23T09:15:00.000Z",
+      text: "Sample looping GIF preview." }
+  ],
+  total: 3, truncated: false
+};
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function loadPrefs(){
+  try { var raw = localStorage.getItem(PREFS_KEY); if (raw) { var p = JSON.parse(raw); return Object.assign({}, DEFAULT_PREFS, p); } } catch(e){}
+  return Object.assign({}, DEFAULT_PREFS);
+}
+function savePrefs(){ try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch(e){} }
+function loadHistory(){
+  try { var raw = localStorage.getItem(HISTORY_KEY); if (raw) { var h = JSON.parse(raw); if (Array.isArray(h)) return h; } } catch(e){}
+  return [];
+}
+function saveHistory(){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch(e){} }
+function fmtCount(n){
+  n = Number(n) || 0;
+  if (n >= 1e6) return (n/1e6).toFixed(1)+"M";
+  if (n >= 1e3) return (n/1e3).toFixed(1)+"K";
+  return String(n);
+}
+function fmtDuration(ms){
+  if (!ms || ms <= 0) return "";
+  var s = Math.round(ms/1000);
+  return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+}
+function estBytes(it){
+  if (it.type === "photo") return Math.max(85000, Math.round((it.width||1280)*(it.height||720)*0.22));
+  var sec = it.durationMs ? it.durationMs/1000 : 8;
+  return Math.max(400000, Math.round(sec*350000));
+}
+function fmtBytes(b){
+  if (b <= 0) return "0 KB";
+  if (b < 1048576) return (b/1024).toFixed(0)+" KB";
+  if (b < 1073741824) return (b/1048576).toFixed(1)+" MB";
+  return (b/1073741824).toFixed(2)+" GB";
+}
+function dateYMD(d){
+  var dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) dt = new Date();
+  return dt.toISOString().slice(0,10);
+}
+function extFor(type, url){
+  if (type === "video" || type === "animated_gif") return "mp4";
+  try {
+    var u = new URL(url);
+    var fmt = u.searchParams.get("format");
+    if (fmt && /^[a-z0-9]+$/i.test(fmt)) return fmt.toLowerCase() === "jpeg" ? "jpg" : fmt.toLowerCase();
+    var pe = u.pathname.split(".").pop().toLowerCase();
+    if (["jpg","jpeg","png","webp","gif"].indexOf(pe) !== -1) return pe === "jpeg" ? "jpg" : pe;
+  } catch(e){}
+  return "jpg";
+}
+function origBase(url){
+  try { var b = new URL(url).pathname.split("/").pop().split(".")[0]; return b.replace(/[^A-Za-z0-9_-]/g,"") || ""; } catch(e){ return ""; }
+}
+function buildFilename(screenName, createdAt, tweetId, index, ext, mediaUrl){
+  var safe = (screenName||"user").replace(/[^A-Za-z0-9_]/g,"") || "user";
+  var pattern = prefs.filenamePattern || "{username}_{date}_{index}";
+  var base = pattern.replace("{username}", safe).replace("{date}", dateYMD(createdAt)).replace("{index}", String(index).padStart(3,"0"));
+  if (prefs.includeOriginalFilename) {
+    var ob = origBase(mediaUrl);
+    if (ob) base += "_" + ob;
+  }
+  return base + "." + ext;
+}
+function showAlert(msg, kind){
+  var box = $("alertBox");
+  if (!msg) { box.innerHTML = ""; return; }
+  box.innerHTML = '<div class="alert ' + (kind||"err") + '">' + esc(msg) + "</div>";
+}
+function setLoading(on){
+  $("submitBtn").disabled = on;
+  $("mainInput").disabled = on;
+  $("submitBtn").innerHTML = on ? '<span class="spinner"></span>' :
+    '<svg id="submitArrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+}
+
+/* ---- Input parsing (same rules as src/lib/x.ts parseXInput) ---- */
+function parseXInput(raw){
+  var cleaned = (raw||"").trim();
+  if (!cleaned) throw new Error("Please enter an X username, profile URL, or tweet URL.");
+  var bare = cleaned.match(/^@?([A-Za-z0-9_]{1,15})$/);
+  if (bare) return { kind:"profile", username: bare[1] };
+  var norm = /^https?:\/\//i.test(cleaned) ? cleaned : "https://" + cleaned;
+  var parsed;
+  try { parsed = new URL(norm); } catch(e){ throw new Error("Invalid X username or URL format."); }
+  var host = parsed.hostname.toLowerCase().replace(/^www\./,"");
+  var allowed = ["x.com","twitter.com","mobile.x.com","mobile.twitter.com","vxtwitter.com","fxtwitter.com","fixupx.com"];
+  if (allowed.indexOf(host) === -1) throw new Error("Please provide a valid x.com or twitter.com link.");
+  var segs = parsed.pathname.split("/").filter(Boolean);
+  if (!segs.length) throw new Error("Missing username or tweet path in URL.");
+  var sIdx = -1;
+  for (var i=0;i<segs.length;i++){ if (segs[i].toLowerCase()==="status"||segs[i].toLowerCase()==="statuses"){ sIdx=i; break; } }
+  if (sIdx !== -1 && segs[sIdx+1]) {
+    var m = segs[sIdx+1].match(/^(\d+)/);
+    if (m) return { kind:"tweet", username: sIdx>0 ? segs[sIdx-1].replace(/^@/,"") : "i", tweetId: m[1] };
+  }
+  var cand = segs[0].replace(/^@/,"");
+  var reserved = ["home","explore","notifications","messages","i","search","settings","compose","login","signup"];
+  if (reserved.indexOf(cand.toLowerCase()) !== -1 || !/^[A-Za-z0-9_]{1,15}$/.test(cand))
+    throw new Error("Could not extract a valid X username from that URL.");
+  return { kind:"profile", username: cand };
+}
+
+/* ---- FxTwitter (public, CORS-enabled) ---- */
+function fxUserToProfile(u){
+  return {
+    restId: String(u.id || ""),
+    name: u.name || u.screen_name || "",
+    screenName: u.screen_name || "",
+    avatarUrl: (u.avatar_url||"").replace("_normal.","_400x400."),
+    bio: u.description || "",
+    followersCount: Number(u.followers||0),
+    followingCount: Number(u.following||0)
+  };
+}
+function fxMediaToItems(tweet, author){
+  var list = [];
+  var raw = [];
+  if (tweet.media && Array.isArray(tweet.media.all)) raw = tweet.media.all;
+  else if (Array.isArray(tweet.media_extended)) raw = tweet.media_extended; /* VxTwitter-shaped fallback */
+  var createdAt = tweet.created_at || new Date().toISOString();
+  var text = tweet.text || "";
+  raw.forEach(function(m, i){
+    var rawType = String(m.type||"image").toLowerCase();
+    var type = rawType === "gif" ? "animated_gif" : rawType === "video" ? "video" : "photo";
+    var mediaUrl = m.url || "";
+    if (!mediaUrl) return;
+    var cleanBase = mediaUrl.split("?")[0];
+    var urlExt = cleanBase.split(".").pop().toLowerCase();
+    var format = urlExt === "png" ? "png" : urlExt === "webp" ? "webp" : "jpg";
+    var origUrl = type === "photo" ? cleanBase + "?format=" + format + "&name=orig" : mediaUrl;
+    var thumb = m.thumbnail_url || (type === "photo" ? cleanBase + "?format=jpg&name=small" : mediaUrl);
+    var ext = extFor(type, origUrl);
+    list.push({
+      id: String(m.id || (tweet.id + "-" + i)),
+      tweetId: String(tweet.id || ""),
+      type: type, url: type === "photo" ? cleanBase : mediaUrl,
+      origUrl: origUrl, thumb: thumb,
+      filename: buildFilename(author.screen_name, createdAt, String(tweet.id||""), list.length+1, ext, mediaUrl),
+      width: Number((m.size && m.size.width) || m.width || 0),
+      height: Number((m.size && m.size.height) || m.height || 0),
+      durationMs: typeof m.duration_millis === "number" ? m.duration_millis : undefined,
+      createdAt: createdAt, text: text
+    });
+  });
+  return list;
+}
+async function fetchTweetLive(username, tweetId){
+  var res = await fetch(FX + "/" + encodeURIComponent(username) + "/status/" + encodeURIComponent(tweetId));
+  var data = await res.json().catch(function(){ return {}; });
+  if (!res.ok || data.code === 404 || !data.tweet) throw new Error("Tweet not found or private.");
+  if (data.code && data.code !== 200) throw new Error("Failed to fetch tweet details (HTTP " + (data.code||res.status) + ").");
+  var t = data.tweet;
+  var author = t.author || { screen_name: data.user_screen_name || username, name: data.user_name || username, avatar_url: data.user_profile_image_url || "" };
+  var user = fxUserToProfile({
+    id: author.id, name: author.name, screen_name: author.screen_name,
+    avatar_url: author.avatar_url, description: author.description,
+    followers: author.followers, following: author.following
+  });
+  return { user: user, media: fxMediaToItems(t, author), tweet: t };
+}
+async function fetchUserLive(username){
+  var res = await fetch(FX + "/" + encodeURIComponent(username));
+  var data = await res.json().catch(function(){ return {}; });
+  if (!res.ok || data.code === 404 || !data.user) throw new Error("User @" + username + " was not found or is unavailable.");
+  if (data.code && data.code !== 200) throw new Error("Failed to fetch user (HTTP " + (data.code||res.status) + ").");
+  return fxUserToProfile(data.user);
+}
+function saveToHistory(query, user, media){
+  var entry = { id: user.screenName.toLowerCase()+"-"+Date.now(), query: query,
+    fetchedAt: new Date().toISOString(), user: user, media: media,
+    total: media.length, truncated: false };
+  history = history.filter(function(h){ return h.user.screenName.toLowerCase() !== user.screenName.toLowerCase(); });
+  history.unshift(entry);
+  history = history.slice(0,50);
+  saveHistory();
+}
+
+/* ---- Fetch flow ---- */
+async function runFetch(rawQuery){
+  var trimmed = (rawQuery||"").trim();
+  if (!trimmed) { showAlert("Please enter an X username, profile URL, or tweet URL."); return; }
+  setLoading(true); showAlert(null);
+  isDemo = false; isProfileOnly = false; tweetInfo = null;
+  try {
+    var parsed = parseXInput(trimmed);
+    if (parsed.kind === "tweet") {
+      var r = await fetchTweetLive(parsed.username, parsed.tweetId);
+      userProfile = r.user; mediaItems = r.media; tweetInfo = r.tweet;
+      selectedIds = new Set(mediaItems.map(function(m){ return m.id; }));
+      saveToHistory(trimmed, userProfile, mediaItems);
+      if (!mediaItems.length) showAlert("This tweet has no media to download.", "ok");
+    } else {
+      var user = await fetchUserLive(parsed.username);
+      userProfile = user; mediaItems = []; tweetInfo = null;
+      selectedIds = new Set();
+      isProfileOnly = true;
+      saveToHistory(trimmed, user, []);
+    }
+    renderResults();
+    if (prefs.autoScroll) $("results").scrollIntoView({ behavior:"smooth", block:"start" });
+  } catch (err) {
+    showAlert(err && err.message ? err.message : "Failed to fetch media.");
+    userProfile = null; mediaItems = []; selectedIds = new Set();
+    renderResults();
+  } finally { setLoading(false); }
+}
+function showDemo(){
+  userProfile = DEMO_RESULT.user;
+  mediaItems = DEMO_RESULT.media.map(function(m){ return Object.assign({}, m); });
+  selectedIds = new Set(mediaItems.map(function(m){ return m.id; }));
+  isDemo = true; isProfileOnly = false; tweetInfo = null;
+  showAlert(null);
+  renderResults();
+  if (prefs.autoScroll) $("results").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+function filteredMedia(){
+  return mediaItems.filter(function(it){ return !!filters[it.type]; });
+}
+function selectedFiltered(){
+  return filteredMedia().filter(function(it){ return selectedIds.has(it.id); });
+}
+function renderResults(){
+  var box = $("results");
+  if (!userProfile) { box.innerHTML = ""; return; }
+  var html = '<div class="results">';
+  if (isDemo) {
+    html += '<div class="demo-banner"><span>Sample preview (Demo)</span><button type="button" id="hideDemoBtn">Hide</button></div>';
+  }
+  html += '<div class="profile">';
+  if (userProfile.avatarUrl) html += '<img class="avatar" src="' + esc(userProfile.avatarUrl) + '" alt="' + esc(userProfile.name) + ' avatar" onerror="this.style.display=\'none\'">';
+  else html += '<div class="avatar-fallback">' + esc((userProfile.screenName||"??").slice(0,2).toUpperCase()) + '</div>';
+  html += '<div style="min-width:0;flex:1"><div><span class="name">' + esc(userProfile.name) + '</span> <span class="handle">@' + esc(userProfile.screenName) + '</span></div>';
+  if (userProfile.bio) html += '<p class="bio">' + esc(userProfile.bio) + '</p>';
+  html += '<div class="counts"><span><strong>' + fmtCount(userProfile.followersCount) + '</strong> Followers</span><span><strong>' + fmtCount(userProfile.followingCount) + '</strong> Following</span></div></div></div>';
+
+  if (tweetInfo) {
+    if (tweetInfo.text) html += '<div class="tweet-text">' + esc(tweetInfo.text) + '</div>';
+    html += '<div class="tweet-meta">' + esc(dateYMD(tweetInfo.created_at)) +
+      (tweetInfo.likes != null ? ' · ' + fmtCount(tweetInfo.likes) + ' likes' : '') +
+      (tweetInfo.retweets != null ? ' · ' + fmtCount(tweetInfo.retweets) + ' reposts' : '') +
+      ' · <a href="https://x.com/' + esc(userProfile.screenName) + '/status/' + esc(String(tweetInfo.id||"")) + '" target="_blank" rel="noopener" style="color:var(--blue)">View on X</a></div>';
+  }
+  if (isProfileOnly) {
+    html += '<div class="alert warn" style="margin-top:16px">Profile timeline media needs a server — this Pages demo fetches full timelines only in the Vercel version (see README). Paste a tweet link here for a live download, or try Demo.</div>';
+  }
+
+  if (!isProfileOnly) {
+    html += '<div class="filter-bar"><div style="display:flex;gap:12px;flex-wrap:wrap">' +
+      '<label><input type="checkbox" data-filter="photo"' + (filters.photo?" checked":"") + '> Photos</label>' +
+      '<label><input type="checkbox" data-filter="video"' + (filters.video?" checked":"") + '> Videos</label>' +
+      '<label><input type="checkbox" data-filter="animated_gif"' + (filters.animated_gif?" checked":"") + '> GIFs</label></div>' +
+      '<div class="sel"><button type="button" id="selAllBtn">Select all</button><span style="color:var(--muted2)">/</span><button type="button" class="plain" id="selNoneBtn">Select none</button></div></div>';
+    var fm = filteredMedia(), sel = selectedFiltered();
+    var totalBytes = sel.reduce(function(a,it){ return a + estBytes(it); }, 0);
+    html += '<div class="count-row"><div><strong>' + sel.length + '</strong> of ' + fm.length + ' selected <span style="color:var(--muted)">(~' + fmtBytes(totalBytes) + ')' + (prefs.showMediaCounts ? ' · ' + mediaItems.length + ' total' : '') + '</span></div>' +
+      '<button type="button" class="zip-btn" id="zipBtn"' + (sel.length===0||zipBusy ? " disabled":"") + '>' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+      (zipBusy ? 'Preparing ZIP…' : 'Download all (.zip)') + '</button></div>';
+    if (!fm.length) {
+      html += '<div class="empty">No media items match the active filters.</div>';
+    } else {
+      html += '<div class="grid">';
+      fm.forEach(function(item){
+        var isSel = selectedIds.has(item.id);
+        var badge = item.type === "animated_gif" ? "GIF" : item.type === "video" ? "VIDEO" : "PHOTO";
+        var dur = fmtDuration(item.durationMs);
+        var dims = (item.width && item.height) ? item.width + "×" + item.height : "";
+        html += '<div class="tile' + (isSel?" selected":"") + '" data-id="' + esc(item.id) + '">' +
+          '<div class="thumb">' +
+          (item.type === "photo"
+            ? '<img src="' + esc(item.thumb) + '" alt="' + esc(item.filename) + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<span style=\\\'font-size:11px;color:var(--muted)\\\'>' + badge + '</span>\'">'
+            : '<video src="' + esc(item.origUrl) + '" preload="metadata" muted playsinline></video>') +
+          '<label class="check"><input type="checkbox" data-item="' + esc(item.id) + '"' + (isSel?" checked":"") + ' aria-label="Select ' + esc(item.filename) + '"></label>' +
+          '<span class="badge">' + badge + '</span>' +
+          ((dur||dims) ? '<span class="meta">' + esc(dur||dims) + '</span>' : '') +
+          '<button type="button" class="dl" data-dl="' + esc(item.id) + '" title="Download ' + esc(item.filename) + '" aria-label="Download ' + esc(item.filename) + '">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>' +
+          '</div><div class="fname">' + esc(item.filename) + '</div></div>';
+      });
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+  box.innerHTML = html;
+
+  var hd = $("hideDemoBtn"); if (hd) hd.onclick = function(){ userProfile=null; mediaItems=[]; selectedIds=new Set(); isDemo=false; renderResults(); };
+  box.querySelectorAll("[data-filter]").forEach(function(cb){
+    cb.onchange = function(){ filters[cb.getAttribute("data-filter")] = cb.checked; renderResults(); };
+  });
+  var sa = $("selAllBtn"); if (sa) sa.onclick = function(){ selectedIds = new Set(filteredMedia().map(function(m){ return m.id; })); renderResults(); };
+  var sn = $("selNoneBtn"); if (sn) sn.onclick = function(){ selectedIds = new Set(); renderResults(); };
+  box.querySelectorAll("[data-item]").forEach(function(cb){
+    cb.onchange = function(){
+      var id = cb.getAttribute("data-item");
+      if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+      renderResults();
+    };
+  });
+  box.querySelectorAll("[data-dl]").forEach(function(btn){
+    btn.onclick = function(){ var it = mediaItems.find(function(m){ return m.id === btn.getAttribute("data-dl"); }); if (it) singleDownload(it); };
+  });
+  var zb = $("zipBtn"); if (zb) zb.onclick = downloadZip;
+}
+async function fetchBlob(url){
+  var res = await fetch(url, { mode:"cors" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return await res.blob();
+}
+function triggerBlobDownload(blob, filename){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+}
+async function singleDownload(item){
+  showAlert(null);
+  downloadingId = item.id;
+  try {
+    var blob = await fetchBlob(item.origUrl);
+    if (prefs.maxFileMB > 0 && blob.size > prefs.maxFileMB*1048576)
+      throw new Error("Skipped " + item.filename + ": file exceeds " + prefs.maxFileMB + " MB limit.");
+    triggerBlobDownload(blob, item.filename);
+  } catch (err) {
+    showAlert(err && err.message ? err.message : "Could not download " + item.filename + ".");
+  } finally { downloadingId = null; }
+}
+async function downloadZip(){
+  var items = selectedFiltered();
+  if (!items.length || zipBusy) return;
+  if (typeof JSZip === "undefined") { showAlert("ZIP library failed to load — check your connection and retry."); return; }
+  zipBusy = true; showAlert(null); renderResults();
+  try {
+    var zip = new JSZip();
+    var added = 0;
+    for (var i=0;i<items.length;i++){
+      var item = items[i];
+      try {
+        var blob = await fetchBlob(item.origUrl);
+        if (prefs.maxFileMB > 0 && blob.size > prefs.maxFileMB*1048576) continue;
+        zip.file(item.filename, await blob.arrayBuffer());
+        added++;
+      } catch(e){ /* skip failed file, continue with the rest */ }
+    }
+    if (!added) throw new Error("No files could be packed into the ZIP (check file size limits or network access).");
+    var zipBlob = await zip.generateAsync({ type:"blob" });
+    var handle = (userProfile && userProfile.screenName ? userProfile.screenName.replace(/[^A-Za-z0-9_]/g,"") : "twitterdl") || "twitterdl";
+    triggerBlobDownload(zipBlob, handle + "-media.zip");
+    showAlert("Downloaded " + handle + "-media.zip (" + added + (added===1?" file":" files") + ").", "ok");
+  } catch (err) {
+    showAlert(err && err.message ? err.message : "Failed to generate ZIP archive.");
+  } finally { zipBusy = false; renderResults(); }
+}
+
+/* ---- Header / form wiring ---- */
+$("fetchForm").addEventListener("submit", function(e){ e.preventDefault(); runFetch($("mainInput").value); });
+$("pasteBtn").addEventListener("click", async function(){
+  showAlert(null);
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      var t = await navigator.clipboard.readText();
+      if (t) { $("mainInput").value = t.trim(); return; }
+    }
+    showAlert("Clipboard access is empty or blocked — paste manually with Ctrl/Cmd+V.");
+  } catch(e){ showAlert("Unable to read clipboard automatically — paste manually with Ctrl/Cmd+V."); }
+});
+$("demoBtn").addEventListener("click", showDemo);
+$("gifBtn").addEventListener("click", function(){ openOverlay("gif"); });
+$("historyBtn").addEventListener("click", function(){ openOverlay("history"); });
+$("prefsBtn").addEventListener("click", function(){ openOverlay("preferences"); });
+$("brandBtn").addEventListener("click", function(){ userProfile=null; mediaItems=[]; selectedIds=new Set(); isDemo=false; isProfileOnly=false; renderResults(); showAlert(null); $("mainInput").value=""; $("mainInput").focus(); });
+$("shareBtn").addEventListener("click", async function(){
+  var url = window.location.href;
+  try { await navigator.clipboard.writeText(url); showAlert("Link copied to clipboard.", "ok"); setTimeout(function(){ if ($("alertBox").textContent.indexOf("Link copied")===0) showAlert(null); }, 2500); }
+  catch(e){ showAlert(url, "ok"); }
+});
+document.querySelectorAll("footer [data-overlay]").forEach(function(b){
+  b.addEventListener("click", function(){ openOverlay(b.getAttribute("data-overlay")); });
+});
+/* Rotating placeholder: elonmusk / x.com/nintendo / https://x.com/NASA */
+(function(){
+  var ph = ["elonmusk", "x.com/nintendo", "https://x.com/NASA"], i = 0;
+  setInterval(function(){ i = (i+1)%ph.length; $("mainInput").setAttribute("placeholder", ph[i]); }, 2500);
+})();
+applyTheme();
+function applyTheme(){
+  var t = prefs.theme || "Dark";
+  var dark = t === "Dark" || (t === "System" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.body.classList.toggle("light", !dark);
+}
+
+/* ---- Overlays ---- */
+var OVERLAY_TITLES = { preferences:"Preferences", history:"History & Saved Accounts", gif:"GIF Converter", privacy:"Privacy Policy", terms:"Terms of Service", faq:"Frequently Asked Questions", tips:"Usage Tips" };
+var prefTab = "fetch";
+var gifFps = 12, gifWidth = 480, gifProgress = null;
+function openOverlay(kind){
+  $("overlayTitle").textContent = OVERLAY_TITLES[kind] || "";
+  renderOverlay(kind);
+  $("overlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeOverlay(){
+  $("overlay").classList.remove("open");
+  document.body.style.overflow = "";
+}
+$("overlayBack").addEventListener("click", closeOverlay);
+$("overlay").addEventListener("click", function(e){ if (e.target === $("overlay")) closeOverlay(); });
+function renderOverlay(kind){
+  var body = $("overlayBody");
+  if (kind === "preferences") body.innerHTML = prefsHtml();
+  else if (kind === "history") body.innerHTML = historyHtml();
+  else if (kind === "gif") body.innerHTML = gifHtml();
+  else body.innerHTML = infoHtml(kind);
+  wireOverlay(kind);
+}
+function prefsHtml(){
+  var tabBtns = '<div class="tabs" role="tablist">' +
+    '<button type="button" data-ptab="auth"' + (prefTab==="auth"?' class="active"':"") + '>Auth</button>' +
+    '<button type="button" data-ptab="fetch"' + (prefTab==="fetch"?' class="active"':"") + '>Fetch</button>' +
+    '<button type="button" data-ptab="general"' + (prefTab==="general"?' class="active"':"") + '>General</button></div>';
+  var inner = "";
+  if (prefTab === "auth") {
+    inner = '<div class="row"><div><div class="label">Access</div><div class="hint">No license or token needed — access is handled server-side in the full version; this Pages demo uses the public FxTwitter API for tweet links.</div></div></div>' +
+      '<div class="row"><div><div class="label">How tweet links work here</div><div class="hint">Paste any public tweet link above and it is fetched live in your browser from api.fxtwitter.com. No account, sign-in, or key is required.</div></div></div>';
+  } else if (prefTab === "fetch") {
+    inner =
+      '<div class="row"><div><div class="label">Max posts</div><div class="hint">Timeline fetch limit per account (10–5000).</div></div><input type="number" id="pfMaxPosts" min="10" max="5000" value="' + prefs.maxPosts + '" style="width:90px"></div>' +
+      '<div class="row"><div><div class="label">Max media items</div><div class="hint">Limiting posts also limits media (10–5000).</div></div><input type="number" id="pfMaxMedia" min="10" max="5000" value="' + prefs.maxMedia + '" style="width:90px"></div>' +
+      '<div class="row"><div><div class="label">Video Quality</div><div class="hint">Best picks the highest available variant.</div></div><select id="pfQuality">' + ["Best","1080p","720p","480p","360p"].map(function(q){ return '<option value="'+q+'"'+(prefs.videoQuality===q?" selected":"")+'>'+q+'</option>'; }).join("") + '</select></div>' +
+      '<div class="row"><div><div class="label">Filename format</div><div class="hint">Example: ' + esc(buildFilename("nintendo", "2026-11-25", "1", 1, "jpg", "https://pbs.twimg.com/media/x.jpg")) + '</div></div><input type="text" id="pfPattern" value="' + esc(prefs.filenamePattern) + '" style="width:210px"></div>' +
+      '<div class="row"><div><div class="label">Include original filename</div><div class="hint">Appends the original media filename to the pattern above.</div></div><input type="checkbox" id="pfOrig"' + (prefs.includeOriginalFilename?" checked":"") + '></div>' +
+      '<div class="row"><div><div class="label">Include replies and retweets</div><div class="hint">Default OFF — fetches original media posts from the timeline.</div></div><input type="checkbox" id="pfReplies"' + (prefs.includeReplies?" checked":"") + '></div>';
+  } else {
+    inner =
+      '<div class="row"><div><div class="label">Auto scroll to results</div></div><input type="checkbox" id="pfScroll"' + (prefs.autoScroll?" checked":"") + '></div>' +
+      '<div class="row"><div><div class="label">Show media counts in history</div></div><input type="checkbox" id="pfCounts"' + (prefs.showMediaCounts?" checked":"") + '></div>' +
+      '<div class="row"><div><div class="label">Theme</div><div class="hint">Visual appearance mode.</div></div><select id="pfTheme">' + ["Dark","Light","System"].map(function(t){ return '<option value="'+t+'"'+(prefs.theme===t?" selected":"")+'>'+t+'</option>'; }).join("") + '</select></div>' +
+      '<div class="row"><div><div class="label">Language</div><div class="hint">Interface language.</div></div><select id="pfLang"><option value="English">English</option></select></div>' +
+      '<div class="row"><div><div class="label">File size limit</div><div class="hint">Default 100 MB — skip larger files during download.</div></div><select id="pfMaxMB">' + [25,50,100,250,500].map(function(m){ return '<option value="'+m+'"'+(prefs.maxFileMB===m?" selected":"")+'>'+m+' MB</option>'; }).join("") + '</select></div>';
+  }
+  return '<div class="panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' + tabBtns +
+    '<button type="button" class="btn" id="pfReset">Reset Settings</button></div><div style="margin-top:8px">' + inner + '</div></div>';
+}
+function historyHtml(){
+  var q = historySearch.trim().toLowerCase();
+  var list = history.filter(function(h){
+    return !q || h.user.screenName.toLowerCase().indexOf(q)!==-1 || h.user.name.toLowerCase().indexOf(q)!==-1 || h.query.toLowerCase().indexOf(q)!==-1;
+  });
+  var items = list.map(function(h){
+    var av = h.user.avatarUrl ? '<img src="' + esc(h.user.avatarUrl) + '" alt="' + esc(h.user.screenName) + '" onerror="this.style.display=\'none\'">' :
+      '<div class="avatar-fallback" style="width:40px;height:40px;font-size:12px">' + esc((h.user.screenName||"??").slice(0,2).toUpperCase()) + '</div>';
+    var loadBtn = (historyTab==="saved" && h.media.length>0) ? '<button type="button" class="btn" data-load="' + esc(h.id) + '">Load</button>' : '';
+    return '<div class="hist-item"><div class="who">' + av + '<div style="min-width:0"><div class="nm">' + esc(h.user.name) + ' <span style="font-size:12px;font-weight:400;color:var(--muted)">@' + esc(h.user.screenName) + '</span></div>' +
+      '<div class="sub2">' + (prefs.showMediaCounts ? h.media.length + ' cached items · ' : '') + new Date(h.fetchedAt).toLocaleDateString() + '</div></div></div>' +
+      '<div style="display:flex;gap:8px;flex-shrink:0">' + loadBtn + '<button type="button" class="btn amber" data-refetch="' + esc(h.id) + '">Refetch</button></div></div>';
+  }).join("");
+  return '<div class="panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+    '<div class="tabs"><button type="button" data-htab="refetch"' + (historyTab==="refetch"?' class="active"':"") + '>Refetch (' + history.length + ')</button>' +
+    '<button type="button" data-htab="saved"' + (historyTab==="saved"?' class="active"':"") + '>Saved Results (' + list.length + ')</button></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="histImportBtn">Import accounts from JSON</button>' +
+    '<button type="button" class="btn danger" id="histClearBtn">Clear all fetches</button></div></div>' +
+    '<input type="text" class="search-box" id="histSearch" placeholder="Search history" value="' + esc(historySearch) + '">' +
+    (list.length===0 ? '<p style="text-align:center;padding:32px 0;color:var(--muted);font-size:14px">No accounts fetched yet.</p>' : items) + '</div>';
+}
+function gifHtml(){
+  return '<div class="panel"><div><h2>GIF Converter</h2><p class="sub">Runs 100% locally in your browser with ffmpeg.wasm (~30 MB initial load on first conversion). No files are uploaded to any server.</p></div>' +
+    '<div class="dropzone" id="gifDrop"><p>Drop your video here or click to browse MP4, MOV, M4V, WebM → animated GIF</p>' +
+    (gifFile ? '<p class="sel">Selected: ' + esc(gifFile.name) + ' (' + fmtBytes(gifFile.size) + ')</p>' : '') +
+    '<p class="sub" style="margin-top:8px">All conversions run locally in your browser. Initial load (~30 MB) may take a moment…</p></div>' +
+    '<div class="grid2"><label>Frame Rate (FPS)<select id="gifFps">' + [8,12,15].map(function(f){ return '<option value="'+f+'"'+(gifFps===f?" selected":"")+'>'+f+' FPS' + (f===8?' (smaller file)':f===12?' (balanced)':' (smoother)') + '</option>'; }).join("") + '</select></label>' +
+    '<label>Max Width (px)<select id="gifWidth">' + [320,480,640].map(function(w){ return '<option value="'+w+'"'+(gifWidth===w?" selected":"")+'>'+w+'px</option>'; }).join("") + '</select></label></div>' +
+    '<div id="gifPreviewWrap">' + (gifPreviewUrl ? '<video class="gif-preview" src="' + gifPreviewUrl + '" controls></video>' : '') + '</div>' +
+    '<button type="button" class="btn amber btn-block" id="gifConvertBtn" style="margin-top:16px"' + (!gifFile||gifBusy?" disabled":"") + '>' + (gifBusy?"Converting…":"Convert to Animated GIF") + '</button>' +
+    '<div id="gifMsg" style="margin-top:12px">' + (gifProgress ? '<p style="font-size:12px;color:#7dd3fc">' + esc(gifProgress) + '</p>' : '') + '</div>' +
+    '<div id="gifOut">' + (gifOutputUrl ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"><img src="' + gifOutputUrl + '" alt="Converted animated GIF" style="width:100%;max-height:288px;object-fit:contain;border-radius:12px;background:var(--surface);border:1px solid var(--border)">' +
+      '<a href="' + gifOutputUrl + '" download="' + esc((gifFile?gifFile.name.replace(/\.[^.]+$/,""):"converted")) + '.gif" class="btn btn-block" style="background:#10b981;color:#020617;font-weight:700;margin-top:12px;text-decoration:none">Download Animated GIF</a></div>' : '') + '</div></div>';
+}
+function infoHtml(kind){
+  if (kind === "faq") return '<div class="panel"><h2>Frequently Asked Questions</h2>' +
+    '<h3>What does TwitterDL do?</h3><p>TwitterDL lets you paste an X (Twitter) username, profile URL, or tweet URL to inspect available photos, videos, and GIFs, filter by media type, and download individual files or a batch ZIP archive.</p>' +
+    '<h3>Do I need a license key, auth token, or login?</h3><p>No. This version handles X guest-token access automatically on the server — no license key, auth token, or account sign-in is required. On this Pages demo, tweet links are fetched live from the public FxTwitter API, also with no login.</p>' +
+    '<h3>Is downloading from X legal?</h3><p>Availability and lawful use depend on applicable copyright laws and X\'s Terms of Service. Only download media you have the right or permission to access and use.</p>' +
+    '<h3>What media can be downloaded?</h3><p>Publicly accessible photos (including high-resolution original variants), MP4 videos, and animated GIFs from public posts or timelines. Protected or private accounts cannot be accessed.</p>' +
+    '<h3>Is my data safe, and is anything stored on servers?</h3><p>Nothing is stored on our servers. Preferences and history are saved locally in your browser\'s localStorage, and GIF conversions run locally in your browser with ffmpeg.wasm.</p></div>';
+  if (kind === "privacy") return '<div class="panel"><h2>Privacy Policy</h2><p style="margin-top:8px">TwitterDL does not store user accounts, search logs, or downloaded media files on its servers. Media downloads stream directly from X\'s media CDN to your browser. Your preferences and saved history remain in your browser\'s localStorage until cleared.</p><p style="margin-top:8px">No Data Storage — We do not store your license key, auth token, fetched timelines, or downloaded files on our servers. No Tracking.</p></div>';
+  if (kind === "terms") return '<div class="panel"><h2>Terms of Service</h2><p style="margin-top:8px">TwitterDL is an independent tool and is not affiliated with, sponsored by, or endorsed by X Corp. You agree to use this service in compliance with applicable laws, copyright holders\' rights, and X\'s Terms of Service. Personal, non-commercial use only.</p></div>';
+  return '<div class="panel"><h2>Tips</h2><ul><li>Paste a full tweet URL (such as <code>x.com/user/status/123...</code>) to grab media from a single post quickly.</li><li>Use the Photos, Videos, and GIFs checkboxes to narrow down large timelines before packing a ZIP archive.</li><li>Use the GIF Converter overlay to turn short MP4, MOV, M4V, or WebM clips into GIFs right inside your browser.</li><li>On this Pages demo, full profile timelines need the Vercel version — a tweet link works live here, or try Demo.</li></ul></div>';
+}
+function wireOverlay(kind){
+  var body = $("overlayBody");
+  if (kind === "preferences") {
+    body.querySelectorAll("[data-ptab]").forEach(function(b){
+      b.onclick = function(){ prefTab = b.getAttribute("data-ptab"); renderOverlay("preferences"); };
+    });
+    var reset = $("pfReset");
+    if (reset) reset.onclick = function(){ prefs = Object.assign({}, DEFAULT_PREFS); savePrefs(); applyTheme(); renderOverlay("preferences"); showAlert("Preferences reset to defaults.", "ok"); };
+    var bind = function(id, fn){ var el = $(id); if (el) el.onchange = function(){ fn(el); savePrefs(); }; };
+    bind("pfMaxPosts", function(el){ prefs.maxPosts = Math.max(10, Math.min(5000, Number(el.value)||200)); });
+    bind("pfMaxMedia", function(el){ prefs.maxMedia = Math.max(10, Math.min(5000, Number(el.value)||600)); });
+    bind("pfQuality", function(el){ prefs.videoQuality = el.value; });
+    bind("pfPattern", function(el){ prefs.filenamePattern = el.value.trim() || "{username}_{date}_{index}"; });
+    bind("pfOrig", function(el){ prefs.includeOriginalFilename = el.checked; });
+    bind("pfReplies", function(el){ prefs.includeReplies = el.checked; });
+    bind("pfScroll", function(el){ prefs.autoScroll = el.checked; });
+    bind("pfCounts", function(el){ prefs.showMediaCounts = el.checked; });
+    bind("pfTheme", function(el){ prefs.theme = el.value; applyTheme(); });
+    bind("pfLang", function(el){ prefs.language = el.value; });
+    bind("pfMaxMB", function(el){ prefs.maxFileMB = Number(el.value)||100; });
+  }
+  if (kind === "history") {
+    body.querySelectorAll("[data-htab]").forEach(function(b){
+      b.onclick = function(){ historyTab = b.getAttribute("data-htab"); renderOverlay("history"); };
+    });
+    var s = $("histSearch");
+    if (s) s.oninput = function(){ historySearch = s.value; var pos = s.selectionStart; renderOverlay("history"); var s2 = $("histSearch"); if (s2) { s2.focus(); s2.setSelectionRange(pos,pos); } };
+    var imp = $("histImportBtn"); if (imp) imp.onclick = function(){ $("historyImportInput").click(); };
+    var clr = $("histClearBtn"); if (clr) clr.onclick = function(){ history = []; saveHistory(); renderOverlay("history"); };
+    body.querySelectorAll("[data-load]").forEach(function(b){
+      b.onclick = function(){
+        var h = history.find(function(x){ return x.id === b.getAttribute("data-load"); });
+        if (!h) return;
+        $("mainInput").value = h.query; userProfile = h.user; mediaItems = h.media;
+        selectedIds = new Set(h.media.map(function(m){ return m.id; }));
+        isDemo = false; isProfileOnly = h.media.length===0; tweetInfo = null;
+        closeOverlay(); renderResults();
+      };
+    });
+    body.querySelectorAll("[data-refetch]").forEach(function(b){
+      b.onclick = function(){
+        var h = history.find(function(x){ return x.id === b.getAttribute("data-refetch"); });
+        if (!h) return;
+        $("mainInput").value = h.user.screenName || h.query;
+        closeOverlay(); runFetch($("mainInput").value);
+      };
+    });
+  }
+  if (kind === "gif") {
+    var dz = $("gifDrop");
+    if (dz) {
+      dz.onclick = function(){ $("gifFileInput").click(); };
+      dz.ondragover = function(e){ e.preventDefault(); e.stopPropagation(); };
+      dz.ondrop = function(e){ e.preventDefault(); e.stopPropagation(); selectGifFile(e.dataTransfer.files && e.dataTransfer.files[0]); };
+    }
+    var fps = $("gifFps"); if (fps) fps.onchange = function(){ gifFps = Number(fps.value); };
+    var w = $("gifWidth"); if (w) w.onchange = function(){ gifWidth = Number(w.value); };
+    var cb = $("gifConvertBtn"); if (cb) cb.onclick = convertGif;
+  }
+}
+$("gifFileInput").addEventListener("change", function(e){ selectGifFile(e.target.files && e.target.files[0]); e.target.value=""; });
+function selectGifFile(file){
+  gifOutputUrl = null; gifProgress = null;
+  if (gifPreviewUrl) URL.revokeObjectURL(gifPreviewUrl);
+  gifPreviewUrl = null; gifFile = file || null;
+  if (gifFile) gifPreviewUrl = URL.createObjectURL(gifFile);
+  if ($("overlay").classList.contains("open")) renderOverlay("gif");
+}
+$("historyImportInput").addEventListener("change", function(e){
+  var file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  file.text().then(function(text){
+    var parsed = JSON.parse(text);
+    var list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.accounts) ? parsed.accounts : []);
+    var imported = [];
+    list.forEach(function(raw){
+      if (typeof raw === "string" && raw.trim()) {
+        var clean = raw.trim().replace(/^@/,"");
+        imported.push({ id:"imp-"+clean+"-"+Date.now()+"-"+imported.length, query:clean, fetchedAt:new Date().toISOString(),
+          user:{ restId:"", name:clean, screenName:clean, avatarUrl:"", bio:"Imported account", followersCount:0, followingCount:0 }, media:[], total:0, truncated:false });
+      } else if (raw && typeof raw === "object") {
+        var sn = String(raw.screenName||raw.screen_name||raw.username||"").replace(/^@/,"");
+        if (sn) imported.push({ id:"imp-"+sn+"-"+Date.now()+"-"+imported.length, query:String(raw.query||sn), fetchedAt:String(raw.fetchedAt||new Date().toISOString()),
+          user:{ restId:String(raw.restId||""), name:String(raw.name||sn), screenName:sn, avatarUrl:String(raw.avatarUrl||""), bio:String(raw.bio||""), followersCount:Number(raw.followersCount||0), followingCount:Number(raw.followingCount||0) },
+          media:Array.isArray(raw.media)?raw.media:[], total:Number(raw.total||0), truncated:!!raw.truncated });
+      }
+    });
+    if (imported.length) { history = imported.concat(history).slice(0,100); saveHistory(); renderOverlay("history"); showAlert("Imported " + imported.length + " account" + (imported.length===1?"":"s") + " from JSON.", "ok"); }
+  }).catch(function(){ showAlert("Could not parse JSON file. Provide an array of accounts or usernames."); });
+});
+function loadScript(src){
+  return new Promise(function(resolve, reject){
+    var s = document.createElement("script"); s.src = src; s.onload = resolve; s.onerror = function(){ reject(new Error("Failed to load " + src)); };
+    document.head.appendChild(s);
+  });
+}
+async function convertGif(){
+  if (!gifFile || gifBusy) return;
+  gifBusy = true; gifProgress = "Loading browser FFmpeg engine (~30 MB initial load)…"; renderOverlay("gif");
+  try {
+    if (!ffmpeg) {
+      await loadScript("https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js");
+      await loadScript("https://unpkg.com/@ffmpeg/util@0.12.2/dist/umd/util.js");
+      var FF = new window.FFmpeg();
+      FF.on("log", function(ev){ if (ev.message && ev.message.indexOf("frame=")!==-1) { gifProgress = "Encoding GIF: " + ev.message.slice(0,72); var m=$("gifMsg"); if (m) m.innerHTML = '<p style="font-size:12px;color:#7dd3fc">'+esc(gifProgress)+'</p>'; } });
+      var base = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+      await FF.load({
+        coreURL: await window.FFmpegUtil.toBlobURL(base + "/ffmpeg-core.js", "text/javascript"),
+        wasmURL: await window.FFmpegUtil.toBlobURL(base + "/ffmpeg-core.wasm", "application/wasm")
+      });
+      ffmpeg = FF;
+    }
+    var ext = (gifFile.name.split(".").pop()||"mp4").toLowerCase();
+    var inputName = "input_clip." + ext, outputName = "output_clip.gif";
+    gifProgress = "Writing video into browser memory…"; renderOverlay("gif");
+    await ffmpeg.writeFile(inputName, await window.FFmpegUtil.fetchFile(gifFile));
+    gifProgress = "Rendering animated GIF…"; renderOverlay("gif");
+    await ffmpeg.exec(["-i", inputName, "-vf", "fps=" + gifFps + ",scale=" + gifWidth + ":-1:flags=lanczos", "-loop", "0", outputName]);
+    var data = await ffmpeg.readFile(outputName);
+    var bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(String(data));
+    if (gifOutputUrl) URL.revokeObjectURL(gifOutputUrl);
+    gifOutputUrl = URL.createObjectURL(new Blob([bytes], { type:"image/gif" }));
+    gifProgress = "GIF ready!";
+  } catch (err) {
+    gifProgress = "GIF conversion failed in browser. Try a shorter clip or check browser memory.";
+  } finally {
+    gifBusy = false;
+    if ($("overlay").classList.contains("open")) renderOverlay("gif");
+  }
+}
+document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeOverlay(); });
+</script>
+</body>
+</html>
